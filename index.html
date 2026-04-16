@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ACHS — Dashboard Empadronamiento Nacional</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  :root {
+    --bg: #f4f3f0;
+    --surface: #ffffff;
+    --surface-alt: #eceae5;
+    --text: #1a1a1a;
+    --text-muted: #6b6860;
+    --text-hint: #9e9a90;
+    --border: rgba(0,0,0,0.08);
+    --teal: #0f6e56;
+    --teal-light: #e1f5ee;
+    --teal-mid: #1D9E75;
+    --blue: #185fa5;
+    --blue-light: #e6f1fb;
+    --blue-mid: #378ADD;
+    --purple: #534AB7;
+    --purple-light: #EEEDFE;
+    --coral: #993c1d;
+    --coral-light: #faece7;
+    --coral-mid: #D85A30;
+    --amber-mid: #EF9F27;
+    --gray-mid: #888780;
+    --radius: 10px;
+    --radius-lg: 14px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 2rem;
+    min-height: 100vh;
+  }
+  .dashboard { max-width: 1120px; margin: 0 auto; }
+
+  /* Header */
+  .header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem;
+  }
+  .header h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
+  .header p { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 600; padding: 5px 12px; border-radius: 20px;
+  }
+  .badge-live { background: var(--teal-light); color: var(--teal); }
+  .badge-live::before {
+    content: ''; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--teal-mid); animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+  .badge-date { background: var(--blue-light); color: var(--blue); margin-left: 6px; }
+
+  /* Metrics */
+  .metrics {
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px; margin-bottom: 1.5rem;
+  }
+  .metric-card {
+    background: var(--surface); border: 0.5px solid var(--border);
+    border-radius: var(--radius); padding: 1rem 1.1rem;
+    position: relative; overflow: hidden;
+  }
+  .metric-card .label {
+    font-size: 11px; color: var(--text-muted); font-weight: 500;
+    text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px;
+  }
+  .metric-card .value {
+    font-family: 'JetBrains Mono', monospace; font-size: 26px; font-weight: 500;
+  }
+  .metric-card .sub {
+    font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 400; color: var(--text-muted);
+  }
+  .metric-card .delta {
+    display: inline-flex; align-items: center; gap: 3px;
+    font-size: 12px; font-weight: 600; margin-left: 6px; padding: 2px 7px;
+    border-radius: 6px;
+  }
+  .delta-up { background: var(--teal-light); color: var(--teal); }
+  .delta-down { background: var(--coral-light); color: var(--coral); }
+  .bar-bg {
+    position: absolute; bottom: 0; left: 0; right: 0; height: 3px;
+    background: var(--surface-alt);
+  }
+  .bar-fill { height: 100%; border-radius: 0 2px 0 0; transition: width 1s ease; }
+
+  /* Tabs */
+  .tabs {
+    display: flex; gap: 4px; margin-bottom: 1.25rem;
+    background: var(--surface-alt); padding: 4px;
+    border-radius: var(--radius); width: fit-content;
+  }
+  .tab-btn {
+    font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500;
+    padding: 7px 16px; border: none; border-radius: 7px; cursor: pointer;
+    background: transparent; color: var(--text-muted); transition: all .2s;
+  }
+  .tab-btn.active {
+    background: var(--surface); color: var(--text);
+    box-shadow: 0 1px 3px rgba(0,0,0,.06);
+  }
+
+  /* Chart panel */
+  .chart-panel {
+    background: var(--surface); border: 0.5px solid var(--border);
+    border-radius: var(--radius-lg); padding: 1.5rem; margin-bottom: 1.5rem;
+  }
+  .chart-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 1rem; flex-wrap: wrap; gap: 8px;
+  }
+  .chart-title { font-size: 15px; font-weight: 600; }
+  .legend { display: flex; gap: 14px; font-size: 12px; color: var(--text-muted); flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .legend-dot { width: 9px; height: 9px; border-radius: 2px; }
+  .legend-line { width: 18px; height: 2px; border-radius: 1px; }
+  .chart-wrap { position: relative; width: 100%; height: 380px; }
+  .chart-view { display: none; }
+  .chart-view.active { display: block; }
+
+  /* Table */
+  .table-panel {
+    background: var(--surface); border: 0.5px solid var(--border);
+    border-radius: var(--radius-lg); overflow-x: auto;
+  }
+  .table-panel table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 820px; }
+  .table-panel thead { background: var(--surface-alt); }
+  .table-panel th {
+    padding: 10px 10px; text-align: left; font-weight: 600;
+    font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: var(--text-muted);
+    white-space: nowrap;
+  }
+  .table-panel th:not(:first-child) { text-align: right; }
+  .table-panel td {
+    padding: 8px 10px; border-top: 0.5px solid var(--border); color: var(--text);
+  }
+  .table-panel td:not(:first-child) {
+    text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 12px;
+  }
+  .table-panel tr:hover td { background: rgba(0,0,0,.015); }
+  .table-panel tr.row-total td {
+    font-weight: 700; background: var(--surface-alt); border-top: 1.5px solid var(--border);
+  }
+  .pct-cell { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+  .pct-bar { width: 50px; height: 5px; background: var(--surface-alt); border-radius: 3px; overflow: hidden; }
+  .pct-fill { height: 100%; border-radius: 3px; }
+
+  .footer {
+    text-align: center; font-size: 11px; color: var(--text-hint);
+    margin-top: 2rem; padding-top: 1rem; border-top: 0.5px solid var(--border);
+  }
+  @media (max-width: 700px) {
+    body { padding: 1rem; }
+    .metrics { grid-template-columns: repeat(2, 1fr); }
+    .chart-wrap { height: 300px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="dashboard">
+  <div class="header">
+    <div>
+      <h1>Empadronamiento nacional</h1>
+      <p>ACHS — Distribución por región · 16 regiones</p>
+    </div>
+    <div>
+      <span class="badge badge-live">En terreno</span>
+      <span class="badge badge-date">Última actualización: 14 abril 2025</span>
+    </div>
+  </div>
+
+  <!-- Metrics -->
+  <div class="metrics">
+    <div class="metric-card">
+      <div class="label">Total casos</div>
+      <div class="value">713</div>
+      <div class="bar-bg"><div class="bar-fill" style="width:100%; background:var(--text-hint);"></div></div>
+    </div>
+    <div class="metric-card">
+      <div class="label">Completos · 14 abr</div>
+      <div class="value" style="color:var(--teal);">500 <span class="sub">/ 70,1%</span></div>
+      <span class="delta delta-up">+72 desde 7 abr</span>
+      <div class="bar-bg"><div class="bar-fill" style="width:70.1%; background:var(--teal-mid);"></div></div>
+    </div>
+    <div class="metric-card">
+      <div class="label">Pendientes · 14 abr</div>
+      <div class="value" style="color:var(--coral);">139</div>
+      <span class="delta delta-up">-3 vs 8 abr</span>
+      <div class="bar-bg"><div class="bar-fill" style="width:19.5%; background:var(--coral-mid);"></div></div>
+    </div>
+    <div class="metric-card">
+      <div class="label">Por entregar · 14 abr</div>
+      <div class="value" style="color:var(--gray-mid);">63</div>
+      <span class="delta delta-up">-84 desde 7 abr</span>
+      <div class="bar-bg"><div class="bar-fill" style="width:8.8%; background:var(--gray-mid);"></div></div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchView('tendencia', this)">Tendencia</button>
+    <button class="tab-btn" onclick="switchView('comparacion', this)">Comparación</button>
+    <button class="tab-btn" onclick="switchView('estado', this)">Por estado</button>
+  </div>
+
+  <div class="chart-panel">
+    <!-- Tendencia -->
+    <div id="view-tendencia" class="chart-view active">
+      <div class="chart-header">
+        <span class="chart-title">Evolución de completitud por región</span>
+        <div class="legend">
+          <span class="legend-item"><span class="legend-line" style="background:#534AB7;"></span>7 abr</span>
+          <span class="legend-item"><span class="legend-line" style="background:#378ADD;"></span>8 abr</span>
+          <span class="legend-item"><span class="legend-line" style="background:#1D9E75;"></span>14 abr</span>
+        </div>
+      </div>
+      <div class="chart-wrap"><canvas id="chartTrend"></canvas></div>
+    </div>
+    <!-- Comparación barras -->
+    <div id="view-comparacion" class="chart-view">
+      <div class="chart-header">
+        <span class="chart-title">% completitud por fecha</span>
+        <div class="legend">
+          <span class="legend-item"><span class="legend-dot" style="background:#534AB7;"></span>7 abr</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#378ADD;"></span>8 abr</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#1D9E75;"></span>14 abr</span>
+        </div>
+      </div>
+      <div class="chart-wrap"><canvas id="chartBars"></canvas></div>
+    </div>
+    <!-- Estado stacked -->
+    <div id="view-estado" class="chart-view">
+      <div class="chart-header">
+        <span class="chart-title">Estado de casos — 14 abril</span>
+        <div class="legend">
+          <span class="legend-item"><span class="legend-dot" style="background:#1D9E75;"></span>Completos</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#EF9F27;"></span>Parciales</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#D85A30;"></span>Pendientes</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#888780;"></span>Por entregar</span>
+        </div>
+      </div>
+      <div class="chart-wrap"><canvas id="chartEstado"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="table-panel">
+    <table>
+      <thead>
+        <tr>
+          <th>Región</th>
+          <th>Total</th>
+          <th>% 7 abr</th>
+          <th>% 8 abr</th>
+          <th>% 14 abr</th>
+          <th>Pend.</th>
+          <th>x Entregar</th>
+          <th>Avance</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+
+  <div class="footer">Centro de Encuestas y Estudios Longitudinales UC · Dashboard generado con IA</div>
+</div>
+
+<script>
+const reg = ['Tarapacá','Antofagasta','Atacama','Coquimbo','Valparaíso','O\'Higgins','Maule','Biobío','Araucanía','Los Lagos','Aysén','Magallanes','RM Santiago','Los Ríos','Arica y P.','Ñuble'];
+const regS = ['Tarapacá','Antofag.','Atacama','Coquimbo','Valparaíso','O\'Higgins','Maule','Biobío','Araucanía','Los Lagos','Aysén','Magallanes','RM Stgo','Los Ríos','Arica','Ñuble'];
+const totals = [26,48,22,54,57,28,37,58,35,23,6,9,265,12,17,16];
+
+// 7 abril
+const p7 = [92.3,54.2,81.8,96.3,77.2,82.1,97.3,32.8,42.9,13.0,33.3,77.8,40.4,83.3,94.1,100.0];
+// 8 abril
+const p8 = [92.3,54.2,81.8,96.3,80.7,82.1,97.3,32.8,42.9,13.0,50.0,77.8,43.0,100.0,94.1,100.0];
+// 14 abril
+const p14 = [92.3,64.6,95.5,96.3,84.2,82.1,97.3,51.7,42.9,47.8,50.0,77.8,59.2,83.3,94.1,100.0];
+
+// 14 abril estado
+const c14 = {
+  comp:[24,31,21,52,48,23,36,30,15,11,3,7,157,10,16,16],
+  parc:[0,1,1,0,1,0,0,0,0,0,0,0,6,0,0,0],
+  pend:[0,16,0,0,8,4,1,19,19,11,0,0,59,2,0,0],
+  entr:[2,0,0,2,0,0,0,7,1,1,3,2,43,0,1,0]
+};
+
+const gc = 'rgba(0,0,0,0.04)', tc = '#9e9a90';
+const ff = { family: "'DM Sans', sans-serif", size: 11 };
+
+// Chart 1: Tendencia (grouped bar, 3 fechas)
+new Chart(document.getElementById('chartTrend'), {
+  type: 'bar',
+  data: {
+    labels: regS,
+    datasets: [
+      { label:'7 abr', data: p7, backgroundColor:'#534AB7', borderRadius:3, barPercentage:.75, categoryPercentage:.82 },
+      { label:'8 abr', data: p8, backgroundColor:'#378ADD', borderRadius:3, barPercentage:.75, categoryPercentage:.82 },
+      { label:'14 abr', data: p14, backgroundColor:'#1D9E75', borderRadius:3, barPercentage:.75, categoryPercentage:.82 }
+    ]
+  },
+  options: {
+    responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: c=> c.dataset.label+': '+Math.round(c.parsed.y)+'%' }}},
+    scales:{
+      x:{ ticks:{color:tc, font:ff, maxRotation:45, autoSkip:false}, grid:{display:false}},
+      y:{ min:0, max:100, ticks:{color:tc, font:ff, callback:v=>v+'%', stepSize:25}, grid:{color:gc}}
+    }
+  }
+});
+
+// Chart 2: Comparación horizontal
+new Chart(document.getElementById('chartBars'), {
+  type: 'bar',
+  data: {
+    labels: regS,
+    datasets: [
+      { label:'7 abr', data: p7, backgroundColor:'rgba(83,74,183,0.25)', borderColor:'#534AB7', borderWidth:1.5, borderRadius:3, barPercentage:.75, categoryPercentage:.82 },
+      { label:'8 abr', data: p8, backgroundColor:'rgba(55,138,221,0.25)', borderColor:'#378ADD', borderWidth:1.5, borderRadius:3, barPercentage:.75, categoryPercentage:.82 },
+      { label:'14 abr', data: p14, backgroundColor:'rgba(29,158,117,0.35)', borderColor:'#1D9E75', borderWidth:1.5, borderRadius:3, barPercentage:.75, categoryPercentage:.82 }
+    ]
+  },
+  options: {
+    indexAxis: 'y',
+    responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label: c=> c.dataset.label+': '+Math.round(c.parsed.x)+'%' }}},
+    scales:{
+      y:{ ticks:{color:tc, font:ff}, grid:{display:false}},
+      x:{ min:0, max:100, ticks:{color:tc, font:ff, callback:v=>v+'%', stepSize:25}, grid:{color:gc}}
+    }
+  }
+});
+
+// Chart 3: Estado stacked (14 abr)
+new Chart(document.getElementById('chartEstado'), {
+  type: 'bar',
+  data: {
+    labels: regS,
+    datasets: [
+      { label:'Completos', data:c14.comp, backgroundColor:'#1D9E75', borderRadius:2 },
+      { label:'Parciales', data:c14.parc, backgroundColor:'#EF9F27', borderRadius:2 },
+      { label:'Pendientes', data:c14.pend, backgroundColor:'#D85A30', borderRadius:2 },
+      { label:'Por entregar', data:c14.entr, backgroundColor:'#888780', borderRadius:2 }
+    ]
+  },
+  options: {
+    responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{display:false}},
+    scales:{
+      x:{ stacked:true, ticks:{color:tc, font:ff, maxRotation:45, autoSkip:false}, grid:{display:false}},
+      y:{ stacked:true, ticks:{color:tc, font:ff}, grid:{color:gc}}
+    }
+  }
+});
+
+// Table
+const tbody = document.getElementById('tableBody');
+function pctC(v){return v>=80?'#0f6e56':v>=50?'#854f0b':'#993c1d'}
+function pctBg(v){return v>=80?'#1D9E75':v>=50?'#EF9F27':'#D85A30'}
+
+for(let i=0;i<reg.length;i++){
+  const delta = p14[i]-p7[i];
+  const arrow = delta > 0 ? '&#9650;' : delta < 0 ? '&#9660;' : '—';
+  const dCol = delta > 0 ? 'var(--teal)' : delta < 0 ? 'var(--coral)' : 'var(--text-hint)';
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td>${reg[i]}</td>
+    <td>${totals[i]}</td>
+    <td><span style="color:${pctC(p7[i])}">${p7[i].toFixed(1)}%</span></td>
+    <td><span style="color:${pctC(p8[i])}">${p8[i].toFixed(1)}%</span></td>
+    <td><div class="pct-cell"><div class="pct-bar"><div class="pct-fill" style="width:${p14[i]}%;background:${pctBg(p14[i])}"></div></div><span style="color:${pctC(p14[i])}">${p14[i].toFixed(1)}%</span></div></td>
+    <td>${c14.pend[i]}</td>
+    <td>${c14.entr[i]}</td>
+    <td style="color:${dCol};font-weight:600;font-size:12px;">${arrow} ${Math.abs(delta).toFixed(1)}pp</td>
+  `;
+  tbody.appendChild(tr);
+}
+const trT = document.createElement('tr');
+trT.className='row-total';
+trT.innerHTML=`<td>Total</td><td>713</td>
+  <td style="color:var(--coral)">58,6%</td>
+  <td style="color:var(--coral)">60,0%</td>
+  <td><div class="pct-cell"><div class="pct-bar"><div class="pct-fill" style="width:70.1%;background:#1D9E75"></div></div><span style="color:#0f6e56">70,1%</span></div></td>
+  <td>139</td><td>63</td>
+  <td style="color:var(--teal);font-weight:600;font-size:12px;">&#9650; 11,5pp</td>`;
+tbody.appendChild(trT);
+
+// Tab switch
+function switchView(id, btn) {
+  document.querySelectorAll('.chart-view').forEach(v=>v.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('view-'+id).classList.add('active');
+  btn.classList.add('active');
+}
+</script>
+</body>
+</html>
